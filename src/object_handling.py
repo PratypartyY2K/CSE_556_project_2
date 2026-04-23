@@ -34,13 +34,13 @@ def load_icosahedron(file_path):
 
 
 def main():
-    # 1. Setup Paths
+    # Setup Paths
     points_path = os.path.join("colmap", "points3D.txt")
     inliers_path = os.path.join("output", "inlier_ids.npy")
     transform_path = os.path.join("output", "euclidean_transform.npz")
     asset_path = os.path.join("src", "assets", "icosahedron.txt")
 
-    # 2. Load Required Data
+    # Load Required Data
     if not os.path.exists(transform_path):
         print("Error: euclidean_transform.npz not found in src/output/")
         return
@@ -53,7 +53,7 @@ def main():
     all_scene_points = load_colmap_points(points_path)
     inlier_indices = np.load(inliers_path)
 
-    # 3. Align, Invert, and Scale
+    # Align, Invert, and Scale
     # Find the 'bottom' vertices (those with the minimum Z coordinate)
     z_min = np.min(vertices[:, 2])
     bottom_v_idx = np.where(np.abs(vertices[:, 2] - z_min) < 1e-5)[0]
@@ -62,23 +62,23 @@ def main():
     # Shift so bottom center is at (0,0,0)
     vertices_local = vertices - bottom_center
 
-    # FLIP: Move into negative Z-direction
+    # Move into negative Z-direction (flip)
     vertices_local[:, 2] *= -1
 
-    # SCALE: Adjust as needed for scene visibility
+    # Adjust as needed for scene visibility (scale)
     scale_factor = 1
     vertices_local *= scale_factor
 
-    # 4. Transform to Scene Coordinates
+    # Transform to Scene Coordinates
     # P_scene = R * P_local + t
     vertices_scene = (vertices_local @ R.T) + t
 
-    # 5. Save the Scene-Transformed Points
+    # Save the Scene-Transformed Points
     output_path = os.path.join("output", "icosahedron_scene_full.npz")
     np.savez(output_path, vertices=vertices_scene, faces=faces)
     print(f"Saved transformed object to {output_path}")
 
-    # 6. Visualization (Local System View)
+    # Visualization (Local System View)
     # Map scene points back to local to verify flatness
     pts_local = (all_scene_points - t) @ R
 
@@ -100,7 +100,7 @@ def main():
         alpha=0.3,
     )
 
-    # --- COLORFUL ICOSAHEDRON ---
+    # Colorful Icosahedron)
     # Create polygons for each face
     poly_faces = [vertices_local[face] for face in faces]
 

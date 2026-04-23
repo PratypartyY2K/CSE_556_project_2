@@ -51,14 +51,12 @@ def fit_plane_ransac(points, iterations=5000, threshold=0.05):
 
 
 if __name__ == "__main__":
-    # Paths relative to root
     input_path = os.path.join("colmap", "points3D.txt")
     output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
 
-    # Run routine
     ids, pts = load_colmap_points(input_path)
-    print(f"Loaded {len(pts)} points. Running RANSAC...")
+    print(f"Loaded {len(pts)} points. Running RANSAC to find dominant plane")
 
     inlier_idx = fit_plane_ransac(pts)
 

@@ -35,13 +35,13 @@ def load_icosahedron(file_path):
 
 
 def main():
-    # 1. Define Paths
+    # Define Paths
     points_path = os.path.join( "colmap", "points3D.txt")
     inliers_path = os.path.join("output", "inlier_ids.npy")
     transform_path = os.path.join("output", "euclidean_transform.npz")
     asset_path = os.path.join("src", "assets", "icosahedron.txt")
 
-    # 2. Load Data
+    # Load Data
     all_points = load_colmap_points(points_path)
     inlier_indices = np.load(inliers_path)
     trans_data = np.load(transform_path)
@@ -50,7 +50,7 @@ def main():
 
     vertices, faces = load_icosahedron(asset_path)
 
-    # 3. Create Local Icosahedron (Centered, Flipped, and Scaled)
+    # Create Local Icosahedron (Centered, Flipped, and Scaled)
     # Identify the bottom face (min z)
     z_min = np.min(vertices[:, 2])
     bottom_v_idx = np.where(np.abs(vertices[:, 2] - z_min) < 1e-5)[0]
@@ -63,11 +63,11 @@ def main():
     scale_factor = 5.0  # Adjust based on scene scale
     vertices_local *= scale_factor
 
-    # 4. Convert Local Points to Scene X, Y, Z
+    # Convert Local Points to Scene X, Y, Z
     # Using the change of basis: P_scene = P_local * R^T + t
     vertices_scene = (vertices_local @ R.T) + t
 
-    # 5. Visualization in Scene Coordinates
+    # Visualization in Scene Coordinates
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection="3d")
 
@@ -115,7 +115,7 @@ def main():
         label="Plane Center (Origin)",
     )
 
-    # 6. Final Plot Settings
+    # Final Plot Settings
     ax.set_xlabel("Global X")
     ax.set_ylabel("Global Y")
     ax.set_zlabel("Global Z")
