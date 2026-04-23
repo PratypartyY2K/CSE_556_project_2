@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 
 def load_colmap_points(file_path):
     points = []
-    # Path relative to src: ../colmap/points3D.txt
     with open(file_path, "r") as f:
         for line in f:
             if line.startswith("#") or not line.strip():
@@ -16,7 +15,7 @@ def load_colmap_points(file_path):
 
 
 def compute_and_plot_transformation():
-    # 1. Setup Paths
+    # Setup Paths
     data_path = os.path.join( "colmap", "points3D.txt")
     inlier_path = os.path.join("output", "inlier_ids.npy")
 
@@ -24,15 +23,15 @@ def compute_and_plot_transformation():
         print(f"Error: Could not find {inlier_path}. Ensure RANSAC has run.")
         return
 
-    # 2. Load Data
+    # Load Data
     all_points = load_colmap_points(data_path)
     inlier_indices = np.load(inlier_path)
     inlier_pts = all_points[inlier_indices]
 
-    # 3. Local Origin (t): Centroid of the inliers
+    # Local Origin (t): Centroid of the inliers
     t = np.mean(inlier_pts, axis=0)
 
-    # 4. Local Basis (R): Change of Basis using SVD
+    # Local Basis (R): Change of Basis using SVD
     centered_pts = inlier_pts - t
     _, _, vh = np.linalg.svd(centered_pts)
 
@@ -45,11 +44,11 @@ def compute_and_plot_transformation():
     # Rotation Matrix R: Local to Scene
     R = np.column_stack((u, v, w))
 
-    # 5. Transform all points to Local Coordinates
+    # Transform all points to Local Coordinates
     # P_local = R^T * (P_scene - t)
     points_local = (all_points - t) @ R
 
-    # 6. Plotting
+    # Plotting
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(111, projection="3d")
 
@@ -76,7 +75,7 @@ def compute_and_plot_transformation():
         label="Dominant Plane (z=0)",
     )
 
-    # PLOT THE LOCAL ORIGIN (Blue)
+    # Plot the local origin (t) in blue
     # Since we subtracted 't' and rotated, the centroid is now at (0, 0, 0)
     ax.scatter([0], [0], [0], c="blue", s=200, marker="X", label="Local Origin (t)")
 
