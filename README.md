@@ -1,9 +1,10 @@
-# CSE 586 / CV2 Project 2: AR Object Rendering
+# CSE 556 Project 2 — AR Overlay Pipeline
 
-This project reconstructs a scene with COLMAP outputs, detects a dominant plane in
-the 3D point cloud, places an icosahedron on that plane, projects the object into
-the source video frames, and stitches the rendered frames into a final augmented
-reality video.
+This repo contains a small pipeline to (1) extract frames, (2) detect a dominant plane in a COLMAP point cloud, (3) build a plane-aligned local coordinate system, (4) place a simple 3D mesh (icosahedron) into the scene, (5) render the mesh into each image, and (6) stitch the rendered frames into a final video.
+
+## Environment setup
+
+Run everything from the **repo root**.
 
 ## Project Structure
 
@@ -26,106 +27,117 @@ reality video.
 `-- output/                  # Generated transforms, frames, plots, and video
 ```
 
-## Requirements
-
-The scripts use Python 3 with:
-
-- `numpy`
-- `matplotlib`
-- `opencv-python`
-
-Install the dependencies in a virtual environment:
+### Create and activate a virtual environment
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install numpy matplotlib opencv-python
+python -m pip install --upgrade pip
 ```
 
-## Inputs
-
-The pipeline expects these files to exist:
-
-- `colmap/points3D.txt`: sparse 3D scene points from COLMAP
-- `colmap/cameras.txt`: camera intrinsics
-- `colmap/images.txt`: camera poses and image names
-- `src/assets/images/`: extracted source frames
-- `src/assets/icosahedron.txt`: object mesh to insert into the scene
-
-## Running the Pipeline
-
-Run commands from the repository root.
-
-1. Detect the dominant plane:
+### Install dependencies
 
 ```bash
-python3 src/ransac.py
+pip install -r requirements.txt
 ```
 
-This writes `output/inlier_ids.npy`.
+## Expected inputs / folders
 
-2. Estimate the plane-aligned coordinate frame:
+- **COLMAP outputs**: `colmap/points3D.txt`, `colmap/cameras.txt`, `colmap/images.txt`
+- **Video + images + mesh asset** (already in this repo): `src/assets/`
+  - `src/assets/main_video.mp4`
+  - `src/assets/images/` (input images used by COLMAP and for overlay rendering)
+  - `src/assets/icosahedron.txt`
+- **Generated outputs** (written by scripts): `output/`
+
+## Execution order (recommended)
+
+### 0) (Optional) Extract frames from a video
+
+This saves **every 10th frame** from `src/assets/main_video.mp4` into `src/assets/images/`.
 
 ```bash
-python3 src/transform.py
+python src/__init__.py
 ```
 
-This writes `output/euclidean_transform.npz` and displays a 3D visualization.
+If you already have your `src/assets/images/` folder and COLMAP was run on it, you can skip this step.
 
-3. Place the icosahedron in the scene:
+### 1) Find dominant plane in the COLMAP point cloud (RANSAC)
+
+Reads `colmap/points3D.txt` and writes `output/inlier_ids.npy`.
 
 ```bash
-python3 src/visualize_scene.py
+python src/ransac.py
 ```
 
-This writes `output/icosahedron_scene_full.npz` and displays the object in the
-reconstructed scene.
+### 2) (Optional) Visualize the dominant plane result
 
-4. Render the object into each frame:
+Uses `output/inlier_ids.npy` to plot inliers vs outliers.
 
 ```bash
-mkdir -p output/updated_frames
-python3 src/render.py
+python src/projection.py
 ```
 
-This writes rendered frame images to `output/updated_frames/`.
+### 3) Compute plane-aligned Euclidean transform
 
-5. Stitch the rendered frames into a video:
+Computes a local coordinate system aligned to the plane and saves:
+- `output/euclidean_transform.npz` (contains `R`, `t`)
 
 ```bash
-python3 src/make_video.py
+python src/transform.py
 ```
 
-This writes `output/final_render.mp4`.
+### 4) Place the icosahedron into the scene and save mesh in scene coordinates
 
-## Outputs
+Produces:
+- `output/icosahedron_scene_full.npz` (scene-space `vertices`, `faces`)
 
-Important generated files include:
+Choose one of the following:
 
-- `output/inlier_ids.npy`: point indices belonging to the detected plane
-- `output/euclidean_transform.npz`: local-to-scene rotation matrix and origin
-- `output/icosahedron_scene_full.npz`: object vertices transformed into scene coordinates
-- `output/updated_frames/`: rendered image sequence
-- `output/final_render.mp4`: final augmented reality result
+- **Just compute + save**:
 
-## Implementation Notes
+```bash
+python src/object_handling.py
+```
 
-- `ransac.py` implements plane fitting from scratch by sampling three points,
-  computing a plane normal, and retaining the model with the most inliers.
-- `transform.py` uses the detected plane inliers to define a local coordinate
-  system with the plane centroid as the origin.
-- `visualize_scene.py` aligns the icosahedron with the local plane frame and
-  transforms it back into COLMAP scene coordinates.
-- `render.py` parses COLMAP camera intrinsics and poses, projects the 3D mesh
-  into each image, and draws colored triangular faces using a painter's
-  algorithm.
-- `make_video.py` sorts the rendered frames and writes the final MP4.
+- **Compute + visualize in global scene coordinates** (also saves the same `.npz`):
 
-## Troubleshooting
+```bash
+python src/visualize_scene.py
+```
 
-- If `transform.py` cannot find `output/inlier_ids.npy`, run `src/ransac.py`
-  first.
-- If `render.py` cannot find `output/icosahedron_scene_full.npz`, run
-  `src/visualize_scene.py` first.
-- If no video is produced, confirm that `output/updated_frames/` contains
-  rendered `.png`, `.jpg`, or `.jpeg` frames.
+### 5) Render the mesh into each image (overlay)
+
+Reads:
+- `output/icosahedron_scene_full.npz`
+- `colmap/cameras.txt`, `colmap/images.txt`
+- `src/assets/images/<image_name>` for each image listed in `images.txt`
+
+Writes:
+- `output/updated_frames/<image_name>.png`
+
+```bash
+python src/render.py
+```
+
+### 6) Stitch overlays into a final MP4
+
+Reads `output/updated_frames/` and writes `output/final_render.mp4`.
+
+```bash
+python src/make_video.py
+```
+
+## One-shot command list
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+
+python src/ransac.py
+python src/transform.py
+python src/object_handling.py    # or: python src/visualize_scene.py
+python src/render.py
+python src/make_video.py
+```
+

@@ -1,3 +1,22 @@
+"""
+ransac.py
+
+Minimal, from-scratch RANSAC implementation to detect the dominant plane in a COLMAP
+3D point cloud.
+
+- Loads 3D points (and their COLMAP point IDs) from `colmap/points3D.txt`.
+- Repeatedly samples 3 points to hypothesize a plane, computes the plane normal via a
+  cross product, and counts inliers whose point-to-plane distance is below a threshold.
+- Returns the best inlier set found after a fixed number of iterations (defaults:
+  5000 iterations, distance threshold 0.05).
+
+When run as a script:
+- Reads `colmap/points3D.txt`
+- Runs RANSAC on the coordinates
+- Saves the *inlier indices* (into the loaded points array) to `output/inlier_ids.npy`
+  for downstream visualization/processing.
+"""
+
 import numpy as np
 import random
 import os
@@ -12,7 +31,7 @@ def load_colmap_points(file_path):
             if line.startswith("#") or not line.strip():
                 continue
             parts = line.split()
-            # ID is col 0, X, Y, Z are cols 1, 2, 3
+            
             ids.append(int(parts[0]))
             points.append([float(parts[1]), float(parts[2]), float(parts[3])])
     return np.array(ids), np.array(points)
@@ -24,23 +43,23 @@ def fit_plane_ransac(points, iterations=5000, threshold=0.05):
     n_points = points.shape[0]
 
     for _ in range(iterations):
-        # Sample 3 unique points
+        
         idx = random.sample(range(n_points), 3)
         p1, p2, p3 = points[idx]
 
-        # Calculate plane normal using cross product
+        
         v1 = p2 - p1
         v2 = p3 - p1
         normal = np.cross(v1, v2)
         norm = np.linalg.norm(normal)
 
         if norm < 1e-6:
-            continue  # Skip collinear points
+            continue  
 
         normal = normal / norm
         d = -np.dot(normal, p1)
 
-        # Vectorized distance calculation: |ax + by + cz + d|
+        
         distances = np.abs(np.dot(points, normal) + d)
         inlier_indices = np.where(distances < threshold)[0]
 
@@ -51,19 +70,21 @@ def fit_plane_ransac(points, iterations=5000, threshold=0.05):
 
 
 if __name__ == "__main__":
+    
     input_path = os.path.join("colmap", "points3D.txt")
     output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
 
+    
     ids, pts = load_colmap_points(input_path)
     print(f"Loaded {len(pts)} points. Running RANSAC to find dominant plane")
 
     inlier_idx = fit_plane_ransac(pts)
 
-    # Save the inlier IDs for the plotter to use
+    
     inlier_ids = ids[inlier_idx]
     save_path = os.path.join(output_dir, "inlier_ids.npy")
-    np.save(save_path, inlier_idx)  # Saving indices for easier plotting later
+    np.save(save_path, inlier_idx)  
 
     print(f"Found {len(inlier_ids)} inliers.")
     print(f"Indices saved to {save_path}")

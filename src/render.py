@@ -1,3 +1,25 @@
+"""
+render.py
+
+Renders a placed 3D mesh (e.g., an icosahedron) into each COLMAP input image by
+projecting its vertices with the recovered camera intrinsics/extrinsics, then saving
+overlay frames.
+
+Key pieces:
+- `load_camera_params(colmap_path)` parses:
+  - `colmap/cameras.txt` to build the camera intrinsic matrix K (supports common pinhole variants)
+  - `colmap/images.txt` to load per-image extrinsics (quaternion + translation) into {R, t}
+- `project_points(points_3d, R, t, K)` applies a pinhole projection:
+  P_cam = R * P_world + t, then pixel = K * (P_cam / z), keeping only points with z > 0
+
+Main script behavior:
+- Loads the scene-space mesh from `output/icosahedron_scene_full.npz` (vertices, faces).
+- For each image listed in `images.txt`, loads the corresponding file from `src/assets/images/`.
+- Computes an approximate painter’s ordering by sorting faces by average camera-space depth.
+- Projects each triangular face and draws it as a semi-transparent colored polygon overlay.
+- Saves the rendered overlays to `output/updated_frames/<image_name>.png`.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -44,7 +66,7 @@ def load_camera_params(colmap_path):
             model = parts[1]
             params = list(map(float, parts[4:]))
 
-            # K = [[f, 0, cx], [0, f, cy], [0, 0, 1]]
+            
             if model in ["SIMPLE_PINHOLE", "SIMPLE_RADIAL"]:
                 f_val, cx, cy = params[0], params[1], params[2]
                 K = np.array([[f_val, 0, cx], [0, f_val, cy], [0, 0, 1]])
@@ -78,7 +100,7 @@ def load_camera_params(colmap_path):
                     "R": quaternion_to_R([qw, qx, qy, qz]),
                     "t": np.array([tx, ty, tz]),
                 }
-                i += 2  # Skip the line containing 2D points
+                i += 2  
             else:
                 i += 1
     return K, images_metadata
@@ -86,19 +108,19 @@ def load_camera_params(colmap_path):
 
 def project_points(points_3d, R, t, K):
     """Manually projects 3D world points to 2D pixels using pinhole model."""
-    # Transform to Camera Coordinates: P_cam = R*P_world + t
+    
     p_cam = (R @ points_3d.T).T + t
     depths = p_cam[:, 2]
 
-    # Identify points in front of the camera (z > 0)
+    
     valid_mask = depths > 0
     if not np.any(valid_mask):
         return np.zeros((0, 2)), depths, valid_mask
 
-    # Project to Normalized Plane
+    
     p_norm = p_cam[valid_mask] / p_cam[valid_mask, 2:3]
 
-    # Project to Pixel Coordinates
+    
     p_pixel = (K @ p_norm.T).T
     return p_pixel[:, :2], depths, valid_mask
 
@@ -121,11 +143,11 @@ def main():
     vertices_world = obj_data["vertices"]
     faces = obj_data["faces"]
 
-    # Modern colormap API
+    
     cmap = plt.colormaps["viridis"]
     face_colors = [cmap(i / len(faces)) for i in range(len(faces))]
 
-    # Iterate through images
+    
     for img_name in sorted(images_metadata.keys()):
         img_path = os.path.join(image_dir, img_name)
         if not os.path.exists(img_path):
@@ -135,20 +157,20 @@ def main():
         img = mpimg.imread(img_path)
         R, t = images_metadata[img_name]["R"], images_metadata[img_name]["t"]
 
-        # Painter's Algorithm: Sort faces by depth
+        
         v_cam = (R @ vertices_world.T).T + t
         face_depths = [np.mean(v_cam[f, 2]) for f in faces]
-        sorted_indices = np.argsort(face_depths)[::-1]  # Farthest first
+        sorted_indices = np.argsort(face_depths)[::-1]  
 
         plt.figure(figsize=(10, 8))
         plt.imshow(img)
 
         for idx in sorted_indices:
             face = faces[idx]
-            # Project vertices of this specific face
+            
             p_pixel, _, valid = project_points(vertices_world[face], R, t, K)
 
-            # Only draw if all 3 vertices are in front of the camera
+            
             if len(p_pixel) == 3:
                 poly = Polygon(
                     p_pixel,

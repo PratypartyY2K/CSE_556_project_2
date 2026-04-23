@@ -1,3 +1,18 @@
+"""
+projection.py
+
+Simple visualization utility for inspecting COLMAP’s reconstructed 3D point cloud and a
+RANSAC-detected dominant plane.
+
+- Loads 3D point coordinates from `colmap/points3D.txt` (skips comments/blank lines).
+- Loads inlier indices for the dominant plane from `output/inlier_ids.npy`
+  (expected to be produced by `ransac_lib.py`).
+- Plots the point cloud in 3D with Matplotlib:
+  - outliers in light grey
+  - plane inliers in red
+- Opens an interactive 3D figure with a fixed viewing angle for quick sanity checks.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -5,7 +20,7 @@ import os
 
 
 def visualize():
-    # Load data
+    
     data_path = os.path.join("colmap", "points3D.txt")
     inlier_path = os.path.join("output", "inlier_ids.npy")
 
@@ -13,7 +28,7 @@ def visualize():
         print("Error: Run ransac_lib.py first to generate inlier data.")
         return
 
-    # Load points (X, Y, Z only)
+    
     points = []
     with open(data_path, "r") as f:
         for line in f:
@@ -23,18 +38,18 @@ def visualize():
             points.append([float(parts[1]), float(parts[2]), float(parts[3])])
     points = np.array(points)
 
-    # Load indices of the inliers
+    
     inlier_indices = np.load(inlier_path)
 
-    # Create mask for outliers
+    
     outlier_mask = np.ones(len(points), dtype=bool)
     outlier_mask[inlier_indices] = False
 
-    # Setup Plot
+    
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(111, projection="3d")
 
-    # Plot Outliers (Grey, very small)
+    
     ax.scatter(
         points[outlier_mask, 0],
         points[outlier_mask, 1],
@@ -45,7 +60,7 @@ def visualize():
         label="Scene Points",
     )
 
-    # Plot Inliers (Red, larger)
+    
     ax.scatter(
         points[inlier_indices, 0],
         points[inlier_indices, 1],
@@ -59,7 +74,7 @@ def visualize():
     ax.set_title("COLMAP 3D Point Cloud - Dominant Plane Detection")
     ax.legend()
 
-    # Adjust view for better perspective
+    
     ax.view_init(elev=20, azim=45)
 
     print("Displaying plot. Close window to finish.")

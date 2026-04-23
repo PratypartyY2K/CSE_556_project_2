@@ -1,3 +1,14 @@
+"""
+src package entrypoint / utility script.
+Provides `convert_video_to_images(video_path, output_path)` to extract frames from a video
+using OpenCV and save them as JPEGs.
+- Opens the input video with `cv2.VideoCapture` and aborts if it can’t be opened.
+- Creates the output directory if needed.
+- Iterates through frames and saves every 10th frame as `frame_<index>.jpg` in `output_path`.
+- When run as a script, reads `assets/main_video.mp4` (relative to this file) and writes
+  extracted frames to `assets/images`, then prints how many frames were saved.
+"""
+
 import os
 import cv2
 

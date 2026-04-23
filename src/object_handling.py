@@ -1,3 +1,22 @@
+"""
+object_handling.py
+Loads a simple 3D mesh (an icosahedron) and places it into a reconstructed COLMAP scene
+using a precomputed Euclidean transform.
+Workflow:
+- Reads COLMAP point cloud coordinates from `colmap/points3D.txt`.
+- Loads an icosahedron mesh (OBJ-like `v`/`f` lines) from `src/assets/icosahedron.txt`.
+- Loads `output/euclidean_transform.npz` containing:
+  - R: rotation mapping local/object coordinates -> scene coordinates
+  - t: translation/origin in scene coordinates
+- Recenters the icosahedron so its “bottom” (min-Z vertices) is at the local origin,
+  flips it into negative Z, optionally scales it, then transforms it into scene space:
+  P_scene = P_local @ R.T + t
+- Saves the transformed mesh to `output/icosahedron_scene_full.npz` (vertices, faces).
+- Visualizes the scene in the *local* coordinate system by mapping COLMAP points back
+  via (P_scene - t) @ R, highlighting inlier plane points from `output/inlier_ids.npy`,
+  and rendering the colored icosahedron for sanity-checking alignment.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -28,69 +47,69 @@ def load_icosahedron(file_path):
             if line.startswith("v "):
                 vertices.append([float(x) for x in line.split()[1:]])
             elif line.startswith("f "):
-                # Standard OBJ format uses 1-based indexing
+                
                 faces.append([int(x.split("/")[0]) - 1 for x in line.split()[1:]])
     return np.array(vertices), np.array(faces)
 
 
 def main():
-    # Setup Paths
+    
     points_path = os.path.join("colmap", "points3D.txt")
     inliers_path = os.path.join("output", "inlier_ids.npy")
     transform_path = os.path.join("output", "euclidean_transform.npz")
     asset_path = os.path.join("src", "assets", "icosahedron.txt")
 
-    # Load Required Data
+    
     if not os.path.exists(transform_path):
         print("Error: euclidean_transform.npz not found in src/output/")
         return
 
     data = np.load(transform_path)
-    R = data["R"]  # Rotation: Local -> Scene
-    t = data["t"]  # Origin: Scene coordinates
+    R = data["R"]  
+    t = data["t"]  
 
     vertices, faces = load_icosahedron(asset_path)
     all_scene_points = load_colmap_points(points_path)
     inlier_indices = np.load(inliers_path)
 
-    # Align, Invert, and Scale
-    # Find the 'bottom' vertices (those with the minimum Z coordinate)
+    
+    
     z_min = np.min(vertices[:, 2])
     bottom_v_idx = np.where(np.abs(vertices[:, 2] - z_min) < 1e-5)[0]
     bottom_center = np.mean(vertices[bottom_v_idx], axis=0)
 
-    # Shift so bottom center is at (0,0,0)
+    
     vertices_local = vertices - bottom_center
 
-    # Move into negative Z-direction (flip)
+    
     vertices_local[:, 2] *= -1
 
-    # Adjust as needed for scene visibility (scale)
+    
     scale_factor = 1
     vertices_local *= scale_factor
 
-    # Transform to Scene Coordinates
-    # P_scene = R * P_local + t
+    
+    
     vertices_scene = (vertices_local @ R.T) + t
 
-    # Save the Scene-Transformed Points
+    
     output_path = os.path.join("output", "icosahedron_scene_full.npz")
     np.savez(output_path, vertices=vertices_scene, faces=faces)
     print(f"Saved transformed object to {output_path}")
 
-    # Visualization (Local System View)
-    # Map scene points back to local to verify flatness
+    
+    
     pts_local = (all_scene_points - t) @ R
 
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection="3d")
 
-    # Plot Background Scene (Grey)
+    
     ax.scatter(
         pts_local[:, 0], pts_local[:, 1], pts_local[:, 2], c="lightgrey", s=1, alpha=0.1
     )
 
-    # Plot Dominant Plane (Red)
+    
     ax.scatter(
         pts_local[inlier_indices, 0],
         pts_local[inlier_indices, 1],
@@ -100,11 +119,11 @@ def main():
         alpha=0.3,
     )
 
-    # Colorful Icosahedron)
-    # Create polygons for each face
+    
+    
     poly_faces = [vertices_local[face] for face in faces]
 
-    # Generate a unique color for each of the 20 faces
+    
     colors = plt.cm.viridis(np.linspace(0, 1, len(faces)))
 
     collection = Poly3DCollection(
@@ -112,10 +131,10 @@ def main():
     )
     ax.add_collection3d(collection)
 
-    # Plot Origin (Blue)
+    
     ax.scatter([0], [0], [0], c="blue", s=200, marker="X", label="Local Origin")
 
-    # Fix Aspect Ratio (Prevents squeezing)
+    
     max_range = (
         np.array(
             [

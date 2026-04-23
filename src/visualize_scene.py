@@ -1,3 +1,24 @@
+"""
+visualize_scene.py
+
+Visual sanity-check script that loads a COLMAP point cloud, a dominant-plane estimate,
+and an icosahedron mesh, then places the mesh into the global scene and visualizes the
+result in 3D.
+
+- Loads scene points from `colmap/points3D.txt`.
+- Loads dominant-plane inlier indices from `output/inlier_ids.npy`.
+- Loads the plane-aligned Euclidean transform from `output/euclidean_transform.npz`:
+  - R: local/object -> scene rotation
+  - t: plane centroid / chosen scene-space origin
+- Loads an icosahedron mesh from `src/assets/icosahedron.txt` (v/f format), recenters it
+  so its bottom touches the local origin, flips it into negative Z, and scales it.
+- Transforms the mesh into the COLMAP scene with: `vertices_scene = vertices_local @ R.T + t`.
+- Plots outlier points (grey), plane inliers (red), the transformed icosahedron (colored faces),
+  and the origin/plane center (blue X), with equal-ish axis scaling for readability.
+- Saves the transformed mesh to `output/icosahedron_scene_full.npz` (vertices, faces) for
+  downstream rendering.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -14,7 +35,7 @@ def load_colmap_points(file_path):
             if line.startswith("#") or not line.strip():
                 continue
             parts = line.split()
-            # X, Y, Z are columns 1, 2, 3
+            
             points.append([float(parts[1]), float(parts[2]), float(parts[3])])
     return np.array(points)
 
@@ -29,49 +50,49 @@ def load_icosahedron(file_path):
             if line.startswith("v "):
                 vertices.append([float(x) for x in line.split()[1:]])
             elif line.startswith("f "):
-                # OBJ indices are 1-based
+                
                 faces.append([int(x.split("/")[0]) - 1 for x in line.split()[1:]])
     return np.array(vertices), np.array(faces)
 
 
 def main():
-    # Define Paths
+    
     points_path = os.path.join( "colmap", "points3D.txt")
     inliers_path = os.path.join("output", "inlier_ids.npy")
     transform_path = os.path.join("output", "euclidean_transform.npz")
     asset_path = os.path.join("src", "assets", "icosahedron.txt")
 
-    # Load Data
+    
     all_points = load_colmap_points(points_path)
     inlier_indices = np.load(inliers_path)
     trans_data = np.load(transform_path)
-    R = trans_data["R"]  # This was defined as [u, v, w] as columns
-    t = trans_data["t"]  # The scene centroid
+    R = trans_data["R"]  
+    t = trans_data["t"]  
 
     vertices, faces = load_icosahedron(asset_path)
 
-    # Create Local Icosahedron (Centered, Flipped, and Scaled)
-    # Identify the bottom face (min z)
+    
+    
     z_min = np.min(vertices[:, 2])
     bottom_v_idx = np.where(np.abs(vertices[:, 2] - z_min) < 1e-5)[0]
     bottom_center = np.mean(vertices[bottom_v_idx], axis=0)
 
-    # Local Transformation (Origin at bottom center, negative z direction)
+    
     vertices_local = vertices - bottom_center
-    vertices_local[:, 2] *= -1  # Flip to negative z direction
+    vertices_local[:, 2] *= -1  
 
-    scale_factor = 5.0  # Adjust based on scene scale
+    scale_factor = 5.0  
     vertices_local *= scale_factor
 
-    # Convert Local Points to Scene X, Y, Z
-    # Using the change of basis: P_scene = P_local * R^T + t
+    
+    
     vertices_scene = (vertices_local @ R.T) + t
 
-    # Visualization in Scene Coordinates
+    
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection="3d")
 
-    # Plot Scene Points (Global X,Y,Z)
+    
     outlier_mask = np.ones(len(all_points), dtype=bool)
     outlier_mask[inlier_indices] = False
     ax.scatter(
@@ -84,7 +105,7 @@ def main():
         label="Other Scene Points",
     )
 
-    # Highlight Plane Inliers
+    
     ax.scatter(
         all_points[inlier_indices, 0],
         all_points[inlier_indices, 1],
@@ -95,16 +116,16 @@ def main():
         label="Dominant Plane",
     )
 
-    # Plot the Transformed Icosahedron
+    
     poly_faces = [vertices_scene[face] for face in faces]
-    colors = plt.cm.rainbow(np.linspace(0, 1, len(faces)))  # Diff colors for faces
+    colors = plt.cm.rainbow(np.linspace(0, 1, len(faces)))  
 
     collection = Poly3DCollection(
         poly_faces, facecolors=colors, edgecolors="black", alpha=0.8
     )
     ax.add_collection3d(collection)
 
-    # Plot Scene Origin (Local t)
+    
     ax.scatter(
         [t[0]],
         [t[1]],
@@ -115,13 +136,13 @@ def main():
         label="Plane Center (Origin)",
     )
 
-    # Final Plot Settings
+    
     ax.set_xlabel("Global X")
     ax.set_ylabel("Global Y")
     ax.set_zlabel("Global Z")
     ax.set_title("Icosahedron Transformed into Global Scene Coordinates")
 
-    # Set equal aspect ratio for global view
+    
     max_range = (
         np.array(
             [
@@ -140,7 +161,7 @@ def main():
     plt.legend()
     plt.show()
 
-    # Save the scene-coordinates object
+    
     np.savez(
         os.path.join("output", "icosahedron_scene_full.npz"),
         vertices=vertices_scene,
